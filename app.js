@@ -1,5 +1,5 @@
 import {STORAGE_KEY, PAIRS, SKILLS, BY_ID, STAGES, freshState, hydrate, counts, testReady, nextStage,
-  newSession, submitActive, advanceSession, recordRecall, validInput, shuffled, finishExam} from './engine.mjs';
+  newSession, suspendSession, submitActive, advanceSession, recordRecall, validInput, shuffled, finishExam} from './engine.mjs';
 
 const app=document.querySelector('#app');
 let storageWarning=false, view='home', input='', revealed=false, validation='', summary=null;
@@ -48,7 +48,7 @@ function examView(){
 function results(){const r=state.result;return `<header class="heading"><h1>Результат теста</h1><p>${r.score===48?'Все направления проверены.':'Разберем комбинации, которые пока путаются.'}</p></header><div class="big-result">${r.score} <span class="muted">/ 48</span></div><p>${Math.round(r.score/48*100)}% правильных ответов</p>${r.mistakes.length?`<section class="errors"><h2>Что повторить</h2>${r.mistakes.map(m=>`<div class="error-row"><div class="mono">${equation(BY_ID[m.id],true)}</div><p>Твой ответ: <span class="mono">${escape(m.answer||'нет ответа')}</span></p></div>`).join('')}</section><div class="actions">${button(`Потренировать ошибки · ${r.mistakes.length}`,'practice-errors','primary')}${button('На главную','home')}</div>`:`<div class="actions">${button('Смешанная тренировка','mixed','primary')}${button('На главную','home')}</div>`}`;}
 function render(){app.innerHTML=noticeIfTraining()+({home,training,tables,summary:sessionSummary,exam:examView,results}[view])();}
 function noticeIfTraining(){return view==='home'?'':notice();}
-function start(mode,stage,preferred=[]){state.session=newSession(state,mode,stage,preferred);input='';validation='';revealed=false;view='training';save();render();focusScreen();}
+function start(mode,stage,preferred=[]){suspendSession(state);state.session=newSession(state,mode,stage,preferred);input='';validation='';revealed=false;view='training';save();render();focusScreen();}
 function setInput(value){
   const s=view==='exam'?BY_ID[state.exam.order[state.exam.index]]:BY_ID[state.session.current];
   const pattern=s.targetBase===2?/[^01]/g:s.targetBase===8?/[^0-7]/g:/[^0-9A-F]/g;
@@ -86,7 +86,7 @@ function action(name){
   }
   else if(name==='exam'){
     if(!state.exam&&!testReady(state))return;
-    state.session=null;
+    suspendSession(state);
     if(!state.exam)state.exam={order:shuffled(SKILLS.map(s=>s.id)),answers:Array(48).fill(''),index:0};
     view='exam';input=state.exam.answers[state.exam.index];validation='';save();render();focusScreen();
   }
@@ -107,6 +107,7 @@ app.addEventListener('click',e=>{const key=e.target.closest('[data-key]');if(key
 app.addEventListener('input',e=>{if(e.target.id==='answer')setInput(e.target.value);});
 document.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey||e.isComposing)return;
+  if((e.key==='Enter'||e.code==='Space')&&e.target.closest('button'))return;
   if(view==='training'&&state.session.mode==='flash'){
     if(e.code==='Space'&&!revealed){e.preventDefault();action('reveal');}
     else if(revealed&&['1','2','3'].includes(e.key)){e.preventDefault();action(`rate-${Number(e.key)-1}`);}
@@ -115,7 +116,7 @@ document.addEventListener('keydown',e=>{
     if(e.target.id==='answer'){if(e.key==='Enter'){e.preventDefault();action(view==='exam'?(state.exam.index===47?'finish-exam':'exam-next'):'submit');}return;}
     if(/^[0-9a-f]$/i.test(e.key)){e.preventDefault();setInput(input+e.key);}
     else if(e.key==='Backspace'){e.preventDefault();setInput(input.slice(0,-1));}
-    else if(e.key==='Enter'&&(e.target.tagName!=='BUTTON'||e.target.closest('[data-key],[data-action="erase"],[data-action="submit"]'))){e.preventDefault();action(view==='exam'?(state.exam.index===47?'finish-exam':'exam-next'):'submit');}
+    else if(e.key==='Enter'){e.preventDefault();action(view==='exam'?(state.exam.index===47?'finish-exam':'exam-next'):'submit');}
   }
 });
 render();

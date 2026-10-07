@@ -115,6 +115,18 @@ export function newSession(state,mode,stageId,preferred=[],rng=Math.random) {
   session.current=chooseQuestion(state,session,rng);
   return session;
 }
+export function suspendSession(state) {
+  const session=state.session;
+  if(!session)return;
+  if(session.mode==='active'){
+    const completed=session.step+(session.feedback?1:0);
+    const pending=[...state.deferred,...session.retry.map(r=>({id:r.id,remaining:Math.max(0,r.due-completed)}))];
+    state.deferred=[...new Set(pending.map(r=>r.id))].map(id=>({id,remaining:Math.min(...pending.filter(r=>r.id===id).map(r=>r.remaining))}));
+  }
+  if(session.feedback)state.lastQuestion=session.current;
+  else if(session.recent.length)state.lastQuestion=session.recent.at(-1);
+  state.session=null;
+}
 export function submitActive(state,session,input,rng=Math.random) {
   if (session.feedback || !validInput(BY_ID[session.current],input)) return false;
   const ok=correctInput(BY_ID[session.current],input);
